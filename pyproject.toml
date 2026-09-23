@@ -3,22 +3,22 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "skinwatch"
-version = "0.2.0"
-description = "Finds Steam Market skins selling below the median of what they went for today"
+name = "dipscan"
+version = "0.1.0"
+description = "Finds coins and stocks trading unusually far below their own recent range"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { file = "LICENSE" }
-keywords = ["steam", "market", "skins", "cs2", "trading"]
+keywords = ["crypto", "stocks", "screener", "dip", "market"]
 classifiers = [
     "Environment :: Console",
     "Programming Language :: Python :: 3",
-    "Topic :: Games/Entertainment",
+    "Topic :: Office/Business :: Financial :: Investment",
 ]
 dependencies = []
 
 [project.scripts]
-skinwatch = "skinwatch.cli:main"
+dipscan = "dipscan.cli:main"
 
 [tool.setuptools]
-packages = ["skinwatch"]
+packages = ["dipscan"]
