@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dipscan import cli, crypto, stocks
 from dipscan.analyze import Filters, measure, rank
+from dipscan.http import FetchError
 from dipscan.models import Asset
 
 
@@ -173,6 +174,78 @@ class CliTests(unittest.TestCase):
         code, output = self.run_cli("--min-drop", "90")
         self.assertEqual(code, 0)
         self.assertIn("Nothing fell that far", output)
+
+
+class LayoutTests(unittest.TestCase):
+    def test_cjk_counts_two_cells(self):
+        self.assertEqual(cli.cell_width("abc"), 3)
+        self.assertEqual(cli.cell_width("龙虾"), 4)
+        self.assertEqual(cli.clip("龙虾龙虾", 5), "龙虾…")
+        self.assertEqual(cli.pad("龙虾", 6, left=True), "龙虾  ")  # 4 cells + 2 spaces
+
+    def test_table_columns_align_with_wide_names(self):
+        dips = [
+            rank([asset("CJK", 1.0, flat(2.0, 30) + [1.0], kind="crypto")], Filters(), 1)[0],
+            rank([asset("ASCII", 1.0, flat(2.0, 30) + [1.0], kind="crypto")], Filters(), 1)[0],
+        ]
+        dips[0].asset.name = "龙虾 (Lobster)"
+        rendered = cli.render_table(dips, cli.Style(False)).split("\n")
+        widths = {cli.cell_width(line) for line in rendered}
+        self.assertEqual(len(widths), 1, "every row must occupy the same number of cells")
+
+    def test_sticky_widths_only_grow(self):
+        dips = rank([asset("A", 1.0, flat(2.0, 30) + [1.0], kind="crypto")], Filters(), 1)
+        sticky = []
+        cli.render_table(dips, cli.Style(False), previous={}, sticky=sticky)
+        wide = list(sticky)
+        dips[0].asset.name = "x"  # a shorter name must not shrink the frame
+        cli.render_table(dips, cli.Style(False), previous={}, sticky=sticky)
+        self.assertEqual(sticky, wide)
+
+
+class WatchTests(unittest.TestCase):
+    def setUp(self):
+        self._fetch = crypto.fetch
+        self.calls = 0
+
+        def fake(_client, top=250, currency="usd"):
+            self.calls += 1
+            price = 85.0 if self.calls == 1 else 80.0
+            return [asset("DIP", price, flat(100.0, 30) + [price], kind="crypto", turnover=90_000_000.0)]
+
+        crypto.fetch = fake
+
+    def tearDown(self):
+        crypto.fetch = self._fetch
+
+    def test_two_refreshes_show_the_change(self):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            code = cli.main(["crypto", "--quiet", "--watch", "0.01", "--cycles", "2"])
+        output = buffer.getvalue()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.calls, 2)
+        self.assertIn("refresh #1", output)
+        self.assertIn("refresh #2", output)
+        self.assertIn("new", output)  # first pass has nothing to compare against
+        self.assertIn("-5.88%", output)  # 85 → 80 between the refreshes
+
+    def test_watch_survives_a_failed_refresh(self):
+        calls = {"n": 0}
+
+        def flaky(_client, top=250, currency="usd"):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise FetchError("HTTP 429")
+            return [asset("DIP", 80.0, flat(100.0, 30) + [80.0], kind="crypto", turnover=90_000_000.0)]
+
+        crypto.fetch = flaky
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            code = cli.main(["crypto", "--quiet", "--watch", "0.01", "--cycles", "2"])
+        self.assertEqual(code, 0)
+        self.assertEqual(calls["n"], 2)
+        self.assertIn("DIP", buffer.getvalue())
 
 
 if __name__ == "__main__":
