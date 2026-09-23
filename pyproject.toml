@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skinwatch"
+version = "0.1.0"
+description = "Finds Steam Market skins whose price just dropped below what they normally sell for"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+keywords = ["steam", "market", "skins", "cs2", "trading"]
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment",
+]
+dependencies = []
+
+[project.scripts]
+skinwatch = "skinwatch.cli:main"
+
+[tool.setuptools]
+packages = ["skinwatch"]
