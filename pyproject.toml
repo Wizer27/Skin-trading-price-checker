@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "skinwatch"
-version = "0.1.0"
-description = "Finds Steam Market skins whose price just dropped below what they normally sell for"
+version = "0.2.0"
+description = "Finds Steam Market skins selling below the median of what they went for today"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { file = "LICENSE" }

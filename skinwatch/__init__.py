@@ -1,8 +1,7 @@
-"""skinwatch — spot Steam Market skins that just got cheaper than they should be."""
+"""skinwatch — spot Steam Market skins selling below what they normally go for."""
 
 from .analyze import Candidate, Filters, rank
 from .steam import SteamError, SteamMarket
-from .storage import PriceStore
 
-__version__ = "0.1.0"
-__all__ = ["Candidate", "Filters", "rank", "SteamMarket", "SteamError", "PriceStore"]
+__version__ = "0.2.0"
+__all__ = ["Candidate", "Filters", "rank", "SteamMarket", "SteamError"]

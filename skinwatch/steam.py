@@ -218,10 +218,12 @@ class SteamMarket:
             self._sleep(wait)
 
     def _headers(self) -> Dict[str, str]:
+        # No Accept-Language here on purpose: Steam's WAF answers 429 to the usual
+        # browser form ("en-US,en;q=0.9") on /market/priceoverview, while plain "en"
+        # or no header at all goes through.
         headers = {
             "User-Agent": USER_AGENT,
             "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Accept-Language": "en-US,en;q=0.9",
             "Accept-Encoding": "gzip",
             "Referer": "%s/market/" % BASE,
         }
