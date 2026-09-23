@@ -1,13 +1,13 @@
 # dipscan
 
-Утилита для терминала: ищет **монеты и акции, которые торгуются аномально ниже своего
-обычного диапазона** — не просто «сильнее всех упало», а «упало сильнее, чем для этого
-актива нормально».
+A terminal screener that finds **coins and stocks trading unusually far below their own
+recent range** — not simply "what fell the most", but "what fell more than is normal for
+this particular asset".
 
-* без зависимостей — только стандартная библиотека Python 3.8+;
-* без ключей API и регистрации: CoinGecko и Yahoo Finance отдают всё публично;
-* ничего не хранит: запустил → получил таблицу; есть `--json`;
-* режим `--watch` — висит в терминале и обновляет уже напечатанную таблицу на месте.
+* no dependencies — Python 3.8+ standard library only;
+* no API keys, no signup: CoinGecko and Yahoo Finance serve this data publicly;
+* stateless — run it, read the table, done; `--json` for scripts;
+* `--watch` keeps it on screen and updates the printed table in place.
 
 ```
 $ python3 -m dipscan
@@ -15,140 +15,143 @@ $ python3 -m dipscan
 Top 8 assets trading well below their recent range
 score = depth of the fall × how abnormal it is · z ≤ -1.0 required · window: crypto 7d hourly
 
-#  Asset                  Price     24h      7d  From high     Z  Vol×  To median  Turnover
-─  ────────────────────  ──────  ──────  ──────  ─────────  ────  ────  ─────────  ────────
-1  SPX · SPX6900         0.4344  -18.2%   -1.7%     -19.0%  -2.4     -     +12.6%     25.9M
-2  ASTER · Aster         0.6895   -5.2%   +0.9%     -12.3%  -2.6     -      +7.2%    169.3M
-3  TRUMP · Official ...    1.98   -9.0%   +7.7%     -12.7%  -1.0     -      +5.0%    443.7M
+#  Asset                    Price     24h     7d  From high     Z  Vol×  To median  Turnover
+─  ──────────────────────  ──────  ──────  ─────  ─────────  ────  ────  ─────────  ────────
+1  SPX · SPX6900           0.4344  -18.2%  -1.7%     -19.0%  -2.4     -     +12.6%     25.9M
+2  ASTER · Aster           0.6895   -5.2%  +0.9%     -12.3%  -2.6     -      +7.2%    169.3M
+3  TRUMP · Official Trump    1.98   -9.0%  +7.7%     -12.7%  -1.0     -      +5.0%    443.7M
 ```
 
-## Почему не «просто упало»
+## Why not just "it dropped"
 
-Падение на 40 % ничего не значит, если актив каждую неделю ходит на 40 %. Поэтому цена
-сравнивается с её собственным разбросом за окно:
+A 40% fall means nothing if the asset routinely swings 40% a week. So the price is judged
+against its own spread over the window:
 
 ```
-From high  = насколько ниже максимума окна          (глубина падения)
-Z          = на сколько сигм ниже среднего окна      (аномальность)
-Vol×       = объём последнего дня / обычный объём     (подтверждение)
-To median  = сколько нужно вырасти до медианы окна    (потенциал возврата)
+From high  how far below the window's high it trades      (depth)
+Z          standard deviations below the window mean      (abnormality)
+Vol×       last session's volume ÷ the window's typical   (confirmation)
+To median  how far it must rise to reach the window median (room to recover)
 
-score = From high × min(1, −Z / 2.5) × (объёмный бонус до 15 %)
+score = From high × min(1, −Z / 2.5) × volume bonus (≤15%)
 ```
 
-Ключевое — **у аномальности нет нижней границы**: актив, который вырос вдвое и отдал
-половину роста, находится на 50 % ниже максимума, но ровно на своём среднем — это шум, и
-его score равен нулю. Дополнительно стоит фильтр `--max-z -1.0`: цена обязана быть хотя бы
-на одну сигму ниже среднего.
+The important part: **abnormality has no floor.** An asset that doubled and gave half of it
+back sits 50% below its high while resting exactly on its own mean — that is noise, not a
+dip, and it scores zero. A `--max-z -1.0` filter backs this up: the price must be at least
+one sigma below the mean to be listed at all.
 
-## Источники и цена запроса
+## Sources and what a scan costs
 
-| Источник | Что даёт | Запросов |
+| Source | What it gives | Requests |
 |---|---|---|
-| CoinGecko `/coins/markets` | 250 монет: цена, объём, изменения 24ч/7д, 167 часовых точек | **1** на 250 монет |
-| Yahoo Finance `/v8/finance/chart` | дневные свечи и объёмы по тикеру | 1 на тикер |
+| CoinGecko `/coins/markets` | 250 coins: price, turnover, 24h/7d change, 167 hourly points | **1** per 250 coins |
+| Yahoo Finance `/v8/finance/chart` | daily candles and volumes for one ticker | 1 per ticker |
 
-Поэтому крипта сканируется вся и мгновенно, а акции — по списку тикеров (по умолчанию
-встроенный список ~74 ликвидных американских бумаг и ETF, около 40 секунд).
+That is why crypto is scanned wholesale in a couple of seconds while stocks go through a
+ticker list — 74 liquid US names and ETFs by default, about 40 seconds.
 
-## Запуск
+## Watch mode
 
 ```bash
-python3 -m dipscan                            # крипта, топ-10
+python3 -m dipscan crypto --watch              # refresh every 60s
+python3 -m dipscan crypto --watch 30 --top 15
+python3 -m dipscan stocks --watch 300          # 74 requests per pass; no point going faster
+python3 -m dipscan crypto --watch 30 --no-clear  # append blocks instead of updating in place
+python3 -m dipscan crypto --watch 60 --json      # one JSON document per refresh
+```
+
+The table is printed once; after that only its own lines are rewritten — the cursor moves
+back up by the height of the block and each line is cleared and redrawn. The screen is
+never cleared, so whatever scrolled above stays put and nothing flickers. The bottom line
+carries a countdown that ticks once a second, and a **Δ** column shows what happened to
+each price since the previous refresh (`new` means the asset just entered the top):
+
+```
+#  Asset                 Price     24h      7d  From high     Z  To median  Turnover       Δ
+1  龙虾 · 龙虾 (Lobster)  0.1595  +15.9%  -23.6%     -44.9%  -1.8     +42.7%     28.5M  +0.28%
+3  CASHCAT · Cash Cat    0.1602   -4.4%   +1.5%     -30.6%  -1.2     +12.6%     17.4M  +0.05%
+```
+
+Column widths only ever grow between refreshes, so the table never shifts sideways, and
+names with CJK characters or emoji are measured in terminal cells rather than code points,
+so rows stay aligned.
+
+Choosing an interval: going below 60 seconds for crypto is pointless — CoinGecko serves a
+cached response and the Δ column fills up with `=`. Stocks cost one request per ticker and
+a pass takes about 40 seconds, so use `--watch 300` or narrow the list with `--symbols`. If
+a pass outlasts the interval the next one starts immediately. A failed refresh (throttling,
+network) does not end the loop: the message appears inside the frame, the last good table
+stays on screen, and work continues on the next pass.
+
+## Usage
+
+```bash
+python3 -m dipscan                            # crypto, top 10
 python3 -m dipscan crypto --top 20 --links
-python3 -m dipscan stocks                     # встроенный список тикеров
+python3 -m dipscan stocks                     # the built-in ticker list
 python3 -m dipscan stocks --symbols "AAPL,MSFT,NVDA,TSLA" --days 180
-python3 -m dipscan all --min-drop 8           # и то и другое в одной таблице
+python3 -m dipscan all --min-drop 8           # both, in one table
 python3 -m dipscan crypto --vs eur
 python3 -m dipscan --json > dips.json
 ```
 
-## Режим наблюдения
+`crypto` is the default command, so `python3 -m dipscan --top 5` works too.
 
-```bash
-python3 -m dipscan crypto --watch            # обновление каждые 60 с
-python3 -m dipscan crypto --watch 30 --top 15
-python3 -m dipscan stocks --watch 300        # акции — 74 запроса за проход, чаще не нужно
-python3 -m dipscan crypto --watch 30 --no-clear   # не перерисовывать, а дописывать вниз
-python3 -m dipscan crypto --watch 60 --json      # по JSON-документу на каждое обновление
-```
+### Flags
 
-Таблица печатается один раз, а дальше переписываются только её строки — курсор поднимается
-на высоту блока, каждая строка гасится и пишется заново. Экран не чистится, поэтому всё, что
-было выше, остаётся на месте, и мигания нет. Внизу тикает обратный отсчёт: раз в секунду
-обновляется только последняя строка. Справа — колонка **Δ**, что стало с ценой с прошлого
-обновления (`new` — актив только что появился в топе):
-
-```
-#  Asset                 Price     24h      7d  From high     Z  To median  Turnover       Δ
-1  龙虾 · 龙虾 (Lobster)    0.1595  +15.9%  -23.6%     -44.9%  -1.8     +42.7%     28.5M  +0.28%
-3  CASHCAT · Cash Cat   0.1602   -4.4%   +1.5%     -30.6%  -1.2     +12.6%     17.4M  +0.05%
-```
-
-Внизу строка состояния: номер обновления, время, сколько активов и за сколько секунд,
-когда следующее. Выход — Ctrl+C.
-
-Ширины колонок между обновлениями только растут, поэтому таблица не дёргается по горизонтали,
-а имена с иероглифами и эмодзи считаются по клеткам терминала, а не по символам — строки не
-разъезжаются.
-
-Сколько ставить интервал: чаще 60 секунд для крипты смысла нет — CoinGecko отдаёт кешированный
-ответ, и в колонке Δ будут одни `=`. Акции — запрос на тикер, проход около 40 секунд, поэтому
-либо `--watch 300`, либо сузить список через `--symbols`. Если проход длится дольше интервала,
-следующий стартует сразу.
-Упавшее обновление (429, сеть) не роняет цикл — в stderr уходит строка и работа
-продолжается со следующего прохода.
-
-### Флаги
-
-| Флаг | Что делает | По умолчанию |
+| Flag | What it does | Default |
 |---|---|---|
-| `--top` | сколько строк вывести | `10` |
-| `--min-drop` | минимальное падение от максимума окна, % | `5` |
-| `--max-z` | цена должна быть не выше этого числа сигм от среднего | `-1.0` |
-| `--min-turnover` | минимальный денежный оборот в сутки | `5000000` |
-| `--min-price` / `--max-price` | коридор цен | `0` / `∞` |
-| `--top-coins` | как глубоко идти по капитализации | `250` |
-| `--vs` | валюта котировки для крипты | `usd` |
-| `--symbols` | тикеры акций через запятую или пробел | встроенный список |
-| `--days` | окно истории по акциям, дней | `90` |
-| `--delay` / `--stock-delay` | пауза между запросами, с | `1.5` / `0.5` |
+| `--top` | how many rows to print | `10` |
+| `--min-drop` | minimum % below the window high | `5` |
+| `--max-z` | price must sit at least this many sigma below the window mean | `-1.0` |
+| `--min-turnover` | minimum money traded per day | `5000000` |
+| `--min-price` / `--max-price` | price range | `0` / `∞` |
+| `--top-coins` | how deep into the market-cap list to go | `250` |
+| `--vs` | quote currency for crypto | `usd` |
+| `--symbols` | stock tickers, comma or space separated | built-in list of 74 |
+| `--days` | stock history window, days | `90` |
+| `--delay` / `--stock-delay` | seconds between requests | `1.5` / `0.5` |
+| `--watch [SECONDS]` | stay running, refreshing the table | off (60s if bare) |
+| `--cycles` | stop after N refreshes (0 = until Ctrl+C) | `0` |
+| `--no-clear` | in `--watch`, append blocks instead of updating in place | — |
 | `--transport` | `auto` / `curl` / `urllib` | `auto` |
-| `--watch [СЕК]` | не выходить, а обновлять таблицу каждые СЕК | — (60 без значения) |
-| `--cycles` | остановиться после N обновлений (0 — до Ctrl+C) | `0` |
-| `--no-clear` | в `--watch` дописывать вниз, а не перерисовывать | — |
-| `--links` | печатать ссылку на каждую строку | — |
-| `--json` | машинный вывод | — |
+| `--links` | print a link under each row | — |
+| `--json` | machine readable output | — |
+| `--quiet` | no progress on stderr | — |
 
-### Подводные камни источников
+### Source quirks worth knowing
 
-* **Yahoo** отвечает 429 на «браузерный» `User-Agent` с Chrome — он ждёт настоящий браузер
-  с куками согласия. Клиент шлёт нейтральный `dipscan/0.1`, не меняйте это на Chrome.
-* **CoinGecko** без ключа лимитирует примерно 5–15 запросов в минуту. Скан крипты — один
-  запрос, так что в лимит упереться сложно; при 429 клиент сам ждёт с растущей паузой.
-* Запросы по умолчанию идут через `curl`, потому что часть TLS-отпечатков Python режется
-  на стороне CDN; `--transport urllib` переключает на стандартную библиотеку.
+* **Yahoo answers 429 to a full browser `User-Agent`** containing Chrome — it expects a real
+  browser carrying consent cookies. The client sends a plain `dipscan/0.1` instead; do not
+  "improve" it into a browser string.
+* **CoinGecko** without a key allows roughly 5–15 requests per minute. A crypto scan is a
+  single request, so this is hard to hit; on a 429 the client backs off and retries.
+* A renamed or delisted ticker answers 404 (the default list had `SQ`, now `XYZ`). Those are
+  skipped without counting against the "the endpoint is unhappy, stop" breaker.
+* Requests go through `curl` by default because some Python TLS fingerprints get filtered at
+  the CDN; `--transport urllib` switches to the standard library.
 
-## Разработка
+## Development
 
 ```bash
-python3 -m unittest discover -s tests -v   # тесты полностью офлайн
+python3 -m unittest discover -s tests -v   # 18 tests, fully offline
 ```
 
 ```
-dipscan/http.py      транспорт (curl/urllib), троттлинг, ретраи
-dipscan/models.py    Asset — единственная структура, которую отдают источники
+dipscan/http.py      transport (curl/urllib), throttling, retries
+dipscan/models.py    Asset — the one shape every source produces
 dipscan/crypto.py    CoinGecko
 dipscan/stocks.py    Yahoo Finance
-dipscan/analyze.py   метрики просадки и ранжирование
-dipscan/cli.py       аргументы и таблица
+dipscan/analyze.py   dip metrics and ranking
+dipscan/cli.py       arguments, table, live block
 ```
 
-Добавить источник — это функция `fetch(client, …) -> List[Asset]`; метрики и вывод
-менять не нужно.
+Adding a source means writing one `fetch(client, …) -> List[Asset]`; metrics and output need
+no changes.
 
-## Дисклеймер
+## Disclaimer
 
-Это скринер, а не инвестиционный совет. Аномальное падение цены — причина посмотреть,
-что произошло, а не причина покупать: у актива могут быть новости, делистинг, сплит,
-дивидендный гэп или разбавление, и «возврат к медиане» никто не обещал.
+This is a screener, not investment advice. An abnormal fall is a reason to look up what
+happened, not a reason to buy: there may be news, a delisting, a split, a dividend gap or
+dilution behind it, and nothing promises a return to the median.
